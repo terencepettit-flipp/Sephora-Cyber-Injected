@@ -63,7 +63,7 @@
           var(--bg);
       }
 
-      .wrap { width: 60%; margin: 0 auto; padding: 18px 0; }
+      .wrap { width: 80%; margin: 0 auto; padding: 18px 0; }
 
       .picker { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 0 0 12px; }
       .picker button { grid-column: 2; justify-self: start; }
@@ -81,10 +81,6 @@
       .main { margin-top: 14px; }
 
       #flipp-container { min-height: 70vh; }
-
-      /* Side panel disabled: hide it and let the flyer use the full width the SDK would otherwise reserve for it. */
-      #flipp-container aside { display: none !important; }
-      #flipp-container main { width: 100% !important; }
 
       .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 60px 16px; }
 
@@ -295,10 +291,7 @@
         }
       }
 
-      // ---- Block click-through -------------------------------------------------------------------------
-      // The SDK renders the flyer inside same-origin iframes. Instead of letting a click open the side panel,
-      // we intercept it (capture phase, before the SDK sees it) and open the block's ttmUrl in a new tab.
-      const BLOCK_URLS = new Map(); // atom globalId -> ttmUrl
+      // ---- Publication normalisation -------------------------------------------------------------------
 
       // Curator returns promotion atoms (blocks with a `promotion` instead of an `offer`) with
       // legacyFlyerItemIdMap: null, and the SDK crashes on `null.flyerItemIdMap` so nothing renders.
@@ -313,55 +306,9 @@
         }
       }
 
-      function indexBlockUrls(pub) {
-        BLOCK_URLS.clear();
-        for (const section of pub.sections || []) {
-          for (const atom of section.atoms || []) {
-            // Offers link via details.ttmUrl; promotion blocks (e.g. category tiles) link via action.target.
-            const promoAction = atom.promotion && atom.promotion.action;
-            const url = (atom.details && atom.details.ttmUrl) || (promoAction && promoAction.target);
-            if (url) BLOCK_URLS.set(atom.globalId, url);
-          }
-        }
-      }
-
-      function hookFlyerFrame(frame) {
-        let doc, win;
-        try { doc = frame.contentDocument; win = frame.contentWindow; } catch { return; }
-        if (!doc || !doc.documentElement || doc.documentElement.hasAttribute("data-block-hook")) return;
-        doc.documentElement.setAttribute("data-block-hook", "1");
-
-        const handler = (e) => {
-          if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
-          const target = e.target && e.target.closest ? e.target : null;
-          if (!target) return;
-
-          let url = null;
-          const atom = target.closest("[data-atom-global-id]");
-          if (atom) {
-            url = BLOCK_URLS.get(atom.getAttribute("data-atom-global-id")) || "";
-          } else {
-            // Section-level blocks (hero banners etc.) are plain links; skip ones already opening a new tab.
-            const link = target.closest("a[href]");
-            // (SVG <a> elements expose href/target as SVGAnimatedString, so read the attributes directly.)
-            if (link && link.getAttribute("target") !== "_blank" && link.closest("[data-section-global-id]")) {
-              url = new URL(link.getAttribute("href"), doc.baseURI).href;
-            }
-          }
-          if (url === null) return; // not a flyer block, leave it alone
-
-          e.preventDefault();
-          e.stopImmediatePropagation(); // keep the SDK from opening the side panel
-          if (url) window.open(url, "_blank", "noopener,noreferrer");
-        };
-
-        for (const type of ["click", "keydown"]) win.addEventListener(type, handler, true);
-      }
-
-      // The SDK (re)creates its iframes and may rewrite their documents, so keep re-attaching the hook.
+      // The SDK (re)creates its iframes, so keep re-applying the nav bar tweak.
       setInterval(() => {
         const frame = document.querySelector("#flipp-container iframe.mainframe");
-        if (frame) hookFlyerFrame(frame);
         const nav = document.querySelector("#flipp-container iframe.navframe");
         if (nav) hideSearchButton(nav);
       }, 250);
@@ -433,7 +380,6 @@
 
         injectAtoms(pub, values);
         normalizePublication(pub);
-        indexBlockUrls(pub);
         setStatus("", "Loading SDK…");
 
         try {
