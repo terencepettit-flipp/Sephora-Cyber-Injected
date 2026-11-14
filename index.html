@@ -65,6 +65,14 @@
 
       .wrap { width: 60%; margin: 0 auto; padding: 18px 0; }
 
+      .picker { display: grid; grid-template-columns: auto 1fr; gap: 8px; margin: 0 0 12px; }
+      .picker button { grid-column: 2; justify-self: start; }
+      .picker label { align-self: center; font-size: 13px; color: var(--muted); white-space: nowrap; }
+      .picker input { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(255,255,255,0.06); color: var(--text); font: 13px ui-monospace, Menlo, monospace; }
+      .picker button { padding: 8px 16px; border-radius: 6px; border: 0; background: #689cff; color: #0b0f17; font-weight: 600; cursor: pointer; }
+      @media (max-width: 900px) { .picker { padding: 0 16px; } }
+
       .hint { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
       .hint:empty { display: none; }
       .hint.ok { color: #7affc0; }
@@ -89,6 +97,13 @@
 
   <body>
     <div class="wrap">
+      <form class="picker" id="picker">
+        <label for="globalIdInput">Global ID:</label>
+        <input id="globalIdInput" type="text" placeholder="Flyer Global ID" autocomplete="off" spellcheck="false" />
+        <label for="templateUrlInput">Template URL:</label>
+        <input id="templateUrlInput" type="text" placeholder="Optional: override the flyer's JSON template URL" autocomplete="off" spellcheck="false" />
+        <button type="submit">Load flyer</button>
+      </form>
       <div class="hint" id="hint"></div>
 
       <section class="main" aria-label="Flyer">
@@ -111,6 +126,20 @@
       for (const [k, v] of new URLSearchParams(location.search)) params.set(k, v);
       const merchantNameIdentifier = params.get("merchantNameIdentifier") || "";
       const $ = (id) => document.getElementById(id);
+
+      // Global ID picker: reloads the page with ?globalId=..., which the Curator call then uses.
+      $("globalIdInput").value = params.get("globalId") || "";
+      $("templateUrlInput").value = params.get("templateUrl") || "";
+      $("picker").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const id = $("globalIdInput").value.trim();
+        if (!id) return;
+        const q = new URLSearchParams(location.search);
+        q.set("globalId", id);
+        const tpl = $("templateUrlInput").value.trim();
+        if (tpl) q.set("templateUrl", tpl); else q.delete("templateUrl");
+        location.search = q.toString();
+      });
 
       function setStatus(kind, text) {
         $("hint").className = kind ? `hint ${kind}` : "hint";
